@@ -9,18 +9,19 @@ import (
 	"net/http"
 	"time"
 
+	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
 )
 
 type User struct {
-	Id bson.ObjectId `bson:"_id,omitempty"`
-	RefreshToken string `bson:"refresh_token"`
+	Id           bson.ObjectId `bson:"_id,omitempty"`
+	RefreshToken string        `bson:"refresh_token"`
 }
 
 const (
-	SecretKey = "SECRET_KEY"
-	AccessTokenDuration = time.Minute * 10
+	SecretKey            = "SECRET_KEY"
+	AccessTokenDuration  = time.Minute * 10
 	RefreshTokenDuration = time.Hour * 24 * 30
 )
 
@@ -57,7 +58,7 @@ func WriteResponseError(writer http.ResponseWriter, err error) {
 	WriteResponseJson(writer, map[string]string{"error": err.Error()})
 }
 
-func ValidateAccessToken(writer http.ResponseWriter, request *http.Request) (*AccessToken, error) {
+func ValidateAccessToken(request *http.Request) (*AccessToken, error) {
 	accessTokenString := request.URL.Query().Get("access_token")
 
 	if accessTokenString == "" {
@@ -95,7 +96,7 @@ func GetUsersAction(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	fmt.Fprint(writer, users)
+	WriteResponseJson(writer, users)
 }
 
 func GetTokensAction(writer http.ResponseWriter, request *http.Request) {
@@ -118,7 +119,15 @@ func GetTokensAction(writer http.ResponseWriter, request *http.Request) {
 	accessToken := CreateAccessToken(userId)
 	accessTokenString := accessToken.GetSignedTokenString(SecretKey)
 	refreshToken := GenerateRefreshToken(accessTokenString, time.Now().Add(RefreshTokenDuration))
-	err = usersCollection.UpdateId(bson.ObjectIdHex(userId), bson.M{"refresh_token": refreshToken})
+	refreshTokenHashBytes, err := bcrypt.GenerateFromPassword([]byte(refreshToken), bcrypt.DefaultCost)
+
+	if err != nil {
+		WriteResponseError(writer, err)
+		return
+	}
+
+	refreshTokenHash := string(refreshTokenHashBytes)
+	err = usersCollection.UpdateId(bson.ObjectIdHex(userId), bson.M{"refresh_token": refreshTokenHash})
 
 	if err != nil {
 		WriteResponseError(writer, err)
@@ -126,14 +135,14 @@ func GetTokensAction(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	WriteResponseJson(writer, map[string]string{
-		"access_token": accessTokenString,
+		"access_token":  accessTokenString,
 		"refresh_token": refreshToken,
 	})
 }
 
 // Action, требующий авторизации. Для примера.
 func PingAction(writer http.ResponseWriter, request *http.Request) {
-	_, err := ValidateAccessToken(writer, request)
+	_, err := ValidateAccessToken(request)
 
 	if err != nil {
 		WriteResponseError(writer, err)
@@ -144,7 +153,7 @@ func PingAction(writer http.ResponseWriter, request *http.Request) {
 }
 
 func RefreshTokensAction(writer http.ResponseWriter, request *http.Request) {
-	accessToken, err := ValidateAccessToken(writer, request)
+	accessToken, err := ValidateAccessToken(request)
 
 	if err != nil {
 		WriteResponseError(writer, err)
@@ -177,14 +186,25 @@ func RefreshTokensAction(writer http.ResponseWriter, request *http.Request) {
 		return
 	}
 
-	if user.RefreshToken != refreshToken {
-		WriteResponseError(writer, errors.New("Invalid refresh token"))
+	err = bcrypt.CompareHashAndPassword([]byte(user.RefreshToken), []byte(refreshToken))
+
+	if err != nil {
+		WriteResponseError(writer, err)
 		return
 	}
 
 	newAccessToken := CreateAccessToken(accessToken.Payload.UserId)
 	newRefreshToken := GenerateRefreshToken(newAccessToken.GetSignedTokenString(SecretKey), time.Now().Add(RefreshTokenDuration))
-	err = usersCollection.UpdateId(bson.ObjectIdHex(accessToken.Payload.UserId), bson.M{"refresh_token": newRefreshToken})
+
+	newRefreshTokenHashBytes, err := bcrypt.GenerateFromPassword([]byte(newRefreshToken), bcrypt.DefaultCost)
+
+	if err != nil {
+		WriteResponseError(writer, err)
+		return
+	}
+
+	newRefreshTokenHash := string(newRefreshTokenHashBytes)
+	err = usersCollection.UpdateId(bson.ObjectIdHex(accessToken.Payload.UserId), bson.M{"refresh_token": newRefreshTokenHash})
 
 	if err != nil {
 		WriteResponseError(writer, err)
@@ -222,8 +242,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	
-	rand.Seed(time.Now().Unix())	
+
+	rand.Seed(time.Now().Unix())
 	http.HandleFunc("/get_users", GetUsersAction)
 	http.HandleFunc("/get_tokens", GetTokensAction)
 	http.HandleFunc("/ping", PingAction)
