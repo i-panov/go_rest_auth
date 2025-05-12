@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"math/rand"
 	"net/http"
 	"time"
 
@@ -62,7 +61,7 @@ func ValidateAccessToken(request *http.Request) (*AccessToken, error) {
 	accessTokenString := request.URL.Query().Get("access_token")
 
 	if accessTokenString == "" {
-		return nil, errors.New("Access token could not be blank")
+		return nil, errors.New("access token could not be blank")
 	}
 
 	accessToken, _, err := ParseAccessToken(accessTokenString)
@@ -72,7 +71,7 @@ func ValidateAccessToken(request *http.Request) (*AccessToken, error) {
 	}
 
 	if accessToken.GetSignedTokenString(SecretKey) != accessTokenString {
-		return nil, errors.New("Invalid access token")
+		return nil, errors.New("invalid access token")
 	}
 
 	_, err = FindUser(accessToken.Payload.UserId)
@@ -163,7 +162,7 @@ func RefreshTokensAction(writer http.ResponseWriter, request *http.Request) {
 	refreshToken := request.URL.Query().Get("refresh_token")
 
 	if refreshToken == "" {
-		WriteResponseError(writer, errors.New("Refresh token could not be blank"))
+		WriteResponseError(writer, errors.New("refresh token could not be blank"))
 		return
 	}
 
@@ -175,7 +174,7 @@ func RefreshTokensAction(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	if refreshTokenExpirationTime.Before(time.Now()) {
-		WriteResponseError(writer, errors.New("Refresh token is expired"))
+		WriteResponseError(writer, errors.New("refresh token is expired"))
 		return
 	}
 
@@ -243,7 +242,6 @@ func main() {
 		panic(err)
 	}
 
-	rand.Seed(time.Now().Unix())
 	http.HandleFunc("/get_users", GetUsersAction)
 	http.HandleFunc("/get_tokens", GetTokensAction)
 	http.HandleFunc("/ping", PingAction)
