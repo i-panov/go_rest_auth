@@ -1,4 +1,4 @@
-module medods_task
+module go_rest_auth
 
 go 1.23.0
 
