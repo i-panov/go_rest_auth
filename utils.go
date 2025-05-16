@@ -5,13 +5,9 @@ import (
 	"encoding/base64"
 	"math/rand"
 	"strings"
+	"sync"
+	"time"
 )
-
-func SplitString(value string, separator rune) []string {
-	return strings.FieldsFunc(value, func(c rune) bool {
-		return c == separator
-	})
-}
 
 func EncodeBase64Url(data []byte) []byte {
 	resultLength := base64.URLEncoding.EncodedLen(len(data))
@@ -37,13 +33,27 @@ func ConcatBytes(left []byte, right []byte, separator byte) []byte {
 	return append(append(left, separator), right...)
 }
 
-func GenerateRandomString(size uint) string {
-	var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
-	result := make([]rune, size)
+var (
+	randomLetters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+	rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+	rngMu sync.Mutex
+)
 
-	for index := range result {
-		result[index] = letters[rand.Intn(len(letters))]
+func GenerateRandomString(size int) string {
+	if size <= 0 {
+		return ""
 	}
 
-	return string(result)
+	rngMu.Lock()
+	defer rngMu.Unlock()
+
+	result := strings.Builder{}
+	result.Grow(size)
+	lettersLen := len(randomLetters)
+
+	for range size {
+		result.WriteRune(randomLetters[rng.Intn(lettersLen)])
+	}
+
+	return result.String()
 }

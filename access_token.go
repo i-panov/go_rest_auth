@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 )
 
 type AccessTokenHeader struct {
@@ -22,7 +24,7 @@ type AccessToken struct {
 	Payload AccessTokenPayload
 }
 
-func (token AccessToken) GetUnsignedToken() []byte {
+func (token *AccessToken) GetUnsignedToken() []byte {
 	headerBytes, _ := json.Marshal(token.Header)
 	headerEncodedBytes := EncodeBase64Url(headerBytes)
 
@@ -32,13 +34,13 @@ func (token AccessToken) GetUnsignedToken() []byte {
 	return ConcatBytes(headerEncodedBytes, payloadEncodedBytes, '.')
 }
 
-func (token AccessToken) GetSignedToken(secretKey string) []byte {
+func (token *AccessToken) GetSignedToken(secretKey string) []byte {
 	unsignedToken := token.GetUnsignedToken()
 	signature := SignAccessToken(unsignedToken, secretKey)
 	return ConcatBytes(unsignedToken, signature, '.')
 }
 
-func (token AccessToken) GetSignedTokenString(secretKey string) string {
+func (token *AccessToken) GetSignedTokenString(secretKey string) string {
 	return string(token.GetSignedToken(secretKey))
 }
 
@@ -49,7 +51,7 @@ func SignAccessToken(unsignedToken []byte, secretKey string) []byte {
 }
 
 func ParseAccessToken(value string) (*AccessToken, string, error) {
-	parts := SplitString(value, '.')
+	parts := strings.Split(value, ".")
 
 	if len(parts) != 3 {
 		msg := fmt.Sprintf("The token has the wrong number of parts: %d", len(parts))
@@ -83,4 +85,13 @@ func ParseAccessToken(value string) (*AccessToken, string, error) {
 	}
 
 	return &token, parts[2], nil
+}
+
+func CreateAccessToken(userId string, duration time.Duration) AccessToken {
+	expirationTime := time.Now().Add(duration)
+
+	return AccessToken{
+		Header:  AccessTokenHeader{Type: "JWT", Algorithm: "sha512"},
+		Payload: AccessTokenPayload{UserId: userId, ExpirationTime: expirationTime.Unix()},
+	}
 }

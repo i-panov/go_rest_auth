@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -22,7 +23,7 @@ func GetRefreshTokenExpirationTime(value string) (*time.Time, error) {
 		return nil, err
 	}
 
-	parts := SplitString(string(decodedTokenBytes), '.')
+	parts := strings.Split(string(decodedTokenBytes), ".")
 
 	if len(parts) != 3 {
 		msg := fmt.Sprintf("The token has the wrong number of parts: %d", len(parts))
